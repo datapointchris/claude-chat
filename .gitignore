@@ -6,4 +6,5 @@ node_modules/
 # future upstream file at the same path cannot make git pull refuse.
 /data/
 /claude/
+/.env.image
 .planning
