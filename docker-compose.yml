@@ -18,8 +18,23 @@ services:
       # Read-only binds. A bind mounted read-only cannot be written whatever the
       # file's ownership, which is what stops the agent's own Bash tool editing
       # its guidance or its permissions.
-      - ./claude/CLAUDE.md:/data/.claude/CLAUDE.md:ro
-      - ./claude/managed-settings.json:/etc/claude-code/managed-settings.json:ro
+      #
+      # create_host_path is off on both. Compose otherwise invents a missing
+      # source as a directory, so a deploy that has not placed these yet would
+      # mount a directory where the deny list belongs and start with no deny
+      # list at all, reporting healthy throughout.
+      - type: bind
+        source: ./claude/CLAUDE.md
+        target: /data/.claude/CLAUDE.md
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./claude/managed-settings.json
+        target: /etc/claude-code/managed-settings.json
+        read_only: true
+        bind:
+          create_host_path: false
     healthcheck:
       test: ['CMD', 'curl', '-fsS', 'http://localhost:3001/health']
       interval: 30s
