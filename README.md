@@ -25,7 +25,7 @@ are all in the homelab repo under `containers/chat-lxc/`. This repo ends at the 
 
 ## What the image contains
 
-`node:22-bookworm-slim`, in two stages. The build stage clones the upstream tag, runs `npm ci` and
+`node:24-bookworm-slim`, in two stages. The build stage clones the upstream tag, runs `npm ci` and
 `npm run build`, then prunes to production dependencies. The runtime stage carries `dist/`,
 `dist-server/`, `node_modules/` and `package.json`, plus `git`, `ripgrep`, `curl`, `tini` and a
 pinned `claude`.
@@ -35,14 +35,23 @@ unconditionally on anything that is not Windows, and Alpine has no bash. Glibc a
 native modules — `node-pty`, `better-sqlite3`, `bcrypt` — resolve prebuilt binaries instead of
 compiling.
 
+Node 24 rather than the `v22` in upstream's `.nvmrc`. Upstream's README asks for v22 or higher, and
+the three native modules plus a `node-pty` shell were exercised on 24.
+
 `package.json` is in the runtime stage because Node needs its `"type": "module"` to load the
 compiled server as ESM, and because the server reads the version it reports on `/health` from it.
 
-Both versions are build args, so a bump is one line:
+The runtime stage also sets `VITE_IS_PLATFORM=true`. The client half of that flag is compiled into
+`dist/`, so the image declares the server's half rather than leaving both to `.env`. Supplied only
+by `.env`, an omission gives a client that renders the app and a server that rejects every call,
+with no login form to fall back to because the build removed it.
 
 ```bash
-docker build --build-arg CLOUDCLI_VERSION=v1.37.2 --build-arg CLAUDE_CODE_VERSION=2.1.241 .
+docker build .
 ```
+
+`CLOUDCLI_VERSION` and `CLAUDE_CODE_VERSION` are build args. Their defaults are in the Dockerfile
+and a bump is one line there.
 
 ## Running it
 
@@ -56,8 +65,9 @@ hand is expected to fail on the guard rather than silently pull something.
 
 The clone directory doubles as the runtime directory. The compose file is git-pulled to `/srv/chat`
 and its relative mounts resolve to `/srv/chat/data` and `/srv/chat/claude`, which sit inside the
-working tree. `.gitignore` covers all three of those paths plus `.env`, so a future upstream file
-at a colliding path cannot make `git pull` refuse on the host.
+working tree. The deploy also writes `.env` there and pins the image tag in `.env.image`, read by a
+second `--env-file`. `.gitignore` covers `data/`, `claude/`, `.env` and `.env.image`, so a future
+upstream file at a colliding path cannot make `git pull` refuse on the host.
 
 ### Mounts
 
@@ -78,9 +88,18 @@ The deny list mounts at `/etc/claude-code/managed-settings.json` rather than
 levels. With the corpus writable, a `.claude/settings.local.json` written inside any corpus project
 would override user settings; nothing overrides managed settings.
 
-`/srv/chat/data/.claude/` has to exist and be owned by uid 1000 before the first start. The
-`CLAUDE.md` bind nests inside the data mount, so Docker creates that directory as root if it is
-missing and the container then cannot write `projects/` beside it.
+### Preconditions
+
+Three things must exist on the host before the first start.
+
+`claude/CLAUDE.md` and `claude/managed-settings.json` must both be real files. Their binds set
+`create_host_path: false`, so the container refuses to start when either is missing. Without that
+guard Compose invents a missing source as a directory, which would mount a directory where the deny
+list belongs and start a healthy-looking container with no deny list at all.
+
+`data/.claude/` has to exist and be owned by uid 1000. The `CLAUDE.md` bind nests inside the
+read-write data mount, so Docker creates that directory as root when it is absent and the container
+then cannot write `projects/` beside it.
 
 ### First start
 
