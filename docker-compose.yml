@@ -1,0 +1,28 @@
+name: chat
+
+services:
+  chat:
+    image: ghcr.io/datapointchris/claude-chat:${CHAT_IMAGE_TAG:?set CHAT_IMAGE_TAG to a sha-<short> tag}
+    container_name: chat
+    restart: unless-stopped
+    ports:
+      - '80:3001'
+    env_file: .env
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      # WORKSPACES_ROOT. The agent writes here.
+      - /srv/corpus:/srv/corpus:rw
+      # HOME. Holds auth.db, ~/.claude/projects transcripts and ~/.cloudcli assets.
+      - ./data:/data:rw
+      # Read-only binds. A bind mounted read-only cannot be written whatever the
+      # file's ownership, which is what stops the agent's own Bash tool editing
+      # its guidance or its permissions.
+      - ./claude/CLAUDE.md:/data/.claude/CLAUDE.md:ro
+      - ./claude/managed-settings.json:/etc/claude-code/managed-settings.json:ro
+    healthcheck:
+      test: ['CMD', 'curl', '-fsS', 'http://localhost:3001/health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
