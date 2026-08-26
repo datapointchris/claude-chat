@@ -1,0 +1,154 @@
+name: Bespoke CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  LOCAL_TAG: claude-chat:verify
+
+jobs:
+  image:
+    name: Build, verify & push image
+    # The repo is public, so a fork PR must not execute inside the private
+    # network. Third-party actions are pinned by commit sha.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+
+      - name: Build
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          load: true
+          tags: ${{ env.LOCAL_TAG }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Start it
+        # No -u and no -e: every assertion below has to read what the image
+        # declares, not what this step supplied.
+        run: |
+          mkdir -p /tmp/verify/data /tmp/verify/corpus
+          chmod -R 777 /tmp/verify
+          docker run -d --name verify \
+            -e WORKSPACES_ROOT=/srv/corpus \
+            -e DATABASE_PATH=/data/auth.db \
+            -e JWT_SECRET=ci-verification-only \
+            -v /tmp/verify/data:/data:rw \
+            -v /tmp/verify/corpus:/srv/corpus:rw \
+            -p 3001:3001 \
+            "$LOCAL_TAG"
+          for _ in $(seq 1 30); do
+            curl -fsS http://localhost:3001/health >/dev/null 2>&1 && exit 0
+            sleep 2
+          done
+          echo "server never answered /health"
+          docker logs verify
+          exit 1
+
+      - name: /health answers
+        run: curl -fsS http://localhost:3001/health | tee /dev/stderr | jq -e '.status == "ok"'
+
+      - name: The image runs as uid 1000
+        # Reads the image's USER directive. docker run passes no --user, so a
+        # dropped USER line fails this.
+        run: |
+          uid=$(docker exec verify id -u)
+          echo "uid=$uid"
+          [ "$uid" = "1000" ]
+
+      - name: The image carries VITE_IS_PLATFORM
+        # Both halves are compiled in, so the image has to declare the server's.
+        # docker run passes no -e, meaning this reads the image's own ENV.
+        run: |
+          value=$(docker exec verify printenv VITE_IS_PLATFORM)
+          echo "VITE_IS_PLATFORM=$value"
+          [ "$value" = "true" ]
+
+      - name: Platform mode is live, server side
+        # authenticateToken emits this only when IS_PLATFORM is true and the
+        # users table is empty.
+        run: |
+          body=$(curl -s http://localhost:3001/api/projects)
+          echo "$body"
+          echo "$body" | jq -e '.error == "Platform mode: No user found in database"'
+
+      - name: No login form in any client chunk
+        # LoginForm and SetupForm are tree-shaken out when VITE_IS_PLATFORM is
+        # true, because ProtectedRoute's branch rendering them is dead.
+        #
+        # Reads every asset the image ships rather than the one chunk an
+        # index.html grep happens to name: vite.config.js splits the build four
+        # ways, and an upstream version that lazy-loaded the auth components
+        # would move them out of the entry chunk.
+        #
+        # The absences are paired with a positive control, because three greps
+        # that all miss look identical to three that pass. agents.login.title
+        # is the provider auth modal and ships in every build, so its presence
+        # is what proves these bytes are the client bundle. Fixed strings
+        # including the quotes: unquoted, login.title matches inside
+        # agents.login.title.
+        run: |
+          docker exec verify sh -c 'cat /app/dist/assets/*.js' > /tmp/bundle.js
+          echo "bytes read: $(wc -c < /tmp/bundle.js)"
+
+          if ! grep -qF -- '"agents.login.title"' /tmp/bundle.js; then
+            echo "FAIL: control string absent — this is not the client bundle"
+            exit 1
+          fi
+          echo "control present: \"agents.login.title\""
+
+          rc=0
+          for marker in '"login.errors.requiredFields"' '"login.placeholders.username"' '"confirmPassword"'; do
+            if grep -qF -- "$marker" /tmp/bundle.js; then
+              echo "FAIL: bundle carries $marker — built without VITE_IS_PLATFORM"
+              rc=1
+            else
+              echo "absent: $marker"
+            fi
+          done
+          exit $rc
+
+      - name: Stop it
+        if: always()
+        run: docker rm -f verify || true
+
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        id: meta
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # sha only. A floating tag makes a rollback ambiguous, and the deploy
+          # pins CHAT_IMAGE_TAG to exactly what this pushed.
+          tags: type=sha,prefix=sha-
+
+      - name: Push the image that was verified
+        # Tags and pushes the local image the steps above ran against. Calling
+        # build-push-action a second time would rebuild, and node:24-bookworm-slim
+        # is a floating tag each build resolves on its own, so a cache miss
+        # would publish bytes nothing tested.
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          echo "${{ steps.meta.outputs.tags }}" | while read -r tag; do
+            [ -n "$tag" ] || continue
+            echo "pushing $tag"
+            docker tag "$LOCAL_TAG" "$tag"
+            docker push "$tag"
+          done
