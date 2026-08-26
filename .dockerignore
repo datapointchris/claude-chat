@@ -1,8 +1,8 @@
 # The build clones its source and copies nothing from this context, so
 # everything here is upload cost. Most of these are also the runtime paths on
-# the host, where the clone directory doubles as it: data/ holds
-# auth.db and the transcripts, and .env holds CLAUDE_CODE_OAUTH_TOKEN. A build
-# run from that directory would otherwise send all of it to the daemon.
+# the host, where the clone directory doubles as it, and .env there holds
+# CLAUDE_CODE_OAUTH_TOKEN. A build run from that directory would otherwise send
+# it to the daemon.
 data/
 claude/
 .env

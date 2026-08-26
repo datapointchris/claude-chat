@@ -11,10 +11,23 @@ services:
     security_opt:
       - no-new-privileges:true
     volumes:
-      # WORKSPACES_ROOT. The agent writes here.
-      - /srv/corpus:/srv/corpus:rw
-      # HOME. Holds auth.db, ~/.claude/projects transcripts and ~/.cloudcli assets.
-      - ./data:/data:rw
+      # WORKSPACES_ROOT. The agent writes here. Refuses to start when absent:
+      # an invented root-owned directory would pass the app's realpath check and
+      # present as an empty corpus rather than as an error.
+      - type: bind
+        source: /srv/corpus
+        target: /srv/corpus
+        bind:
+          create_host_path: false
+      # HOME. Holds auth.db, ~/.claude/projects transcripts and ~/.cloudcli
+      # assets. Outside the clone: /srv/chat is a git checkout the deploy pulls
+      # in, and git clean -fdx there is a thing someone does to unstick a pull.
+      # -x reaches it precisely because .gitignore covers data/.
+      - type: bind
+        source: /var/db/chat
+        target: /data
+        bind:
+          create_host_path: false
       # Read-only binds. A bind mounted read-only cannot be written whatever the
       # file's ownership, which is what stops the agent's own Bash tool editing
       # its guidance or its permissions.

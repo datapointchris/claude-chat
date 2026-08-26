@@ -63,18 +63,22 @@ The container listens on 3001 and runs as uid 1000. Running as root breaks proje
 deliberate — a floating tag makes a rollback ambiguous — so a bare `docker compose up` typed by
 hand is expected to fail on the guard rather than silently pull something.
 
-The clone directory doubles as the runtime directory. The compose file is git-pulled to `/srv/chat`
-and its relative mounts resolve to `/srv/chat/data` and `/srv/chat/claude`, which sit inside the
-working tree. The deploy also writes `.env` there and pins the image tag in `.env.image`, read by a
-second `--env-file`. `.gitignore` covers `data/`, `claude/`, `.env` and `.env.image`, so a future
-upstream file at a colliding path cannot make `git pull` refuse on the host.
+The clone directory doubles as the runtime directory. The compose file is git-pulled to `/srv/chat`,
+and `claude/`, `.env` and `.env.image` all sit inside the working tree there — the tag is pinned in
+`.env.image` and read by a second `--env-file`. `.gitignore` covers those three and `data/`, so a
+future upstream file at a colliding path cannot make `git pull` refuse on the host.
+
+The database and transcripts deliberately do not live there. `/srv/chat` is a git checkout that the
+deploy pulls into, so `git clean -fdx` is something an operator reaches for to unstick a pull, and
+`-x` would reach an ignored `data/`. They sit at `/var/db/chat` instead, which is also where the
+backup host looks.
 
 ### Mounts
 
 | Container path | Mode | What it is |
 | --- | --- | --- |
 | `/srv/corpus` | rw | `WORKSPACES_ROOT`. The agent may write here. |
-| `/data` | rw | `HOME`. Holds `auth.db`, `.claude/projects`, `.cloudcli/`. |
+| `/data` | rw | `HOME`, from `/var/db/chat`. Holds `auth.db`, `.claude/projects`, `.cloudcli/`. |
 | `/data/.claude/CLAUDE.md` | ro | Corpus guidance. |
 | `/etc/claude-code/managed-settings.json` | ro | The tool deny list. |
 
@@ -90,16 +94,19 @@ would override user settings; nothing overrides managed settings.
 
 ### Preconditions
 
-Three things must exist on the host before the first start.
+Four things must exist on the host before the first start. Every bind sets
+`create_host_path: false`, so a missing one refuses to start rather than being invented. Without
+that guard Compose creates a missing source as a root-owned directory — which for
+`managed-settings.json` would mean a healthy-looking container running with no deny list at all.
 
-`claude/CLAUDE.md` and `claude/managed-settings.json` must both be real files. Their binds set
-`create_host_path: false`, so the container refuses to start when either is missing. Without that
-guard Compose invents a missing source as a directory, which would mount a directory where the deny
-list belongs and start a healthy-looking container with no deny list at all.
+- `claude/CLAUDE.md`, a real file
+- `claude/managed-settings.json`, a real file
+- `/var/db/chat`, owned by uid 1000
+- `/var/db/chat/.claude/`, owned by uid 1000
 
-`data/.claude/` has to exist and be owned by uid 1000. The `CLAUDE.md` bind nests inside the
-read-write data mount, so Docker creates that directory as root when it is absent and the container
-then cannot write `projects/` beside it.
+The last one is separate because the `CLAUDE.md` bind nests inside the read-write data mount. Docker
+creates that directory as root when it is absent, and the container then cannot write `projects/`
+beside it.
 
 ### First start
 

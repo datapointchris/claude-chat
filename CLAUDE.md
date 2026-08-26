@@ -40,6 +40,10 @@ server's is read from the environment. The image sets the server's so they canno
 build sets the client's. A build that omits it ships a login form; an environment that omits it
 rejects every API call. Neither failure shows up on `/health`.
 
-**The clone directory doubles as the runtime directory on the host.** `data/`, `claude/`, `.env`
-and `.env.image` all live inside the working tree and are all gitignored. An upstream file landing
-at any of those paths would make `git pull` fail on the host with nothing wrong in the repo.
+**The clone directory doubles as the runtime directory on the host.** `claude/`, `.env` and
+`.env.image` live inside the working tree and are gitignored, as is `data/`, which nothing uses at
+runtime. An upstream file landing at any of those paths would make `git pull` fail on the host with
+nothing wrong in the repo.
+
+The database and transcripts stay out of it, at `/var/db/chat`. The deploy runs `git` in the clone
+directory, so anything ignored there is one `git clean -fdx` away from being deleted.
