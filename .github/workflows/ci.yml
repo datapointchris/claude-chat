@@ -1,0 +1,123 @@
+name: Bespoke CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  image:
+    name: Build, verify & push image
+    # The repo is public, so a fork PR must not execute inside the homelab VLAN.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build for verification
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: claude-chat:verify
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Start the image
+        run: |
+          mkdir -p /tmp/verify/data /tmp/verify/corpus
+          chmod -R 777 /tmp/verify
+          docker run -d --name verify \
+            -u 1000:1000 \
+            -e VITE_IS_PLATFORM=true \
+            -e WORKSPACES_ROOT=/srv/corpus \
+            -e DATABASE_PATH=/data/auth.db \
+            -e JWT_SECRET=ci-verification-only \
+            -v /tmp/verify/data:/data:rw \
+            -v /tmp/verify/corpus:/srv/corpus:rw \
+            -p 3001:3001 \
+            claude-chat:verify
+          for _ in $(seq 1 30); do
+            curl -fsS http://localhost:3001/health >/dev/null 2>&1 && exit 0
+            sleep 2
+          done
+          echo "server never answered /health"
+          docker logs verify
+          exit 1
+
+      - name: /health answers
+        run: curl -fsS http://localhost:3001/health | tee /dev/stderr | jq -e '.status == "ok"'
+
+      - name: Not running as root
+        run: |
+          uid=$(docker exec verify id -u)
+          echo "uid=$uid"
+          [ "$uid" = "1000" ]
+
+      - name: IS_PLATFORM is on, server side
+        # authenticateToken returns this only when IS_PLATFORM is true and the
+        # users table is empty, so it proves the flag reached the server.
+        run: |
+          body=$(curl -s http://localhost:3001/api/projects)
+          echo "$body"
+          echo "$body" | jq -e '.error == "Platform mode: No user found in database"'
+
+      - name: No login form in the client bundle
+        # LoginForm and SetupForm are tree-shaken out when VITE_IS_PLATFORM is
+        # true, because ProtectedRoute's branch that renders them is dead. Match
+        # fixed strings including the quotes: the unquoted form collides with
+        # agents.login.*, which is the provider auth modal and always ships.
+        run: |
+          asset=$(curl -fsS http://localhost:3001/ | grep -o 'assets/index-[A-Za-z0-9]*\.js')
+          echo "bundle: $asset"
+          curl -fsS "http://localhost:3001/$asset" > /tmp/bundle.js
+          status=0
+          for marker in '"login.errors.requiredFields"' '"login.placeholders.username"' '"confirmPassword"'; do
+            if grep -qF -- "$marker" /tmp/bundle.js; then
+              echo "FAIL: bundle carries $marker — built without VITE_IS_PLATFORM"
+              status=1
+            else
+              echo "absent: $marker"
+            fi
+          done
+          exit $status
+
+      - name: Stop the container
+        if: always()
+        run: docker rm -f verify || true
+
+      - uses: docker/login-action@v3
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/metadata-action@v5
+        id: meta
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # sha only. A floating tag makes a rollback ambiguous, and the deploy
+          # pins CHAT_IMAGE_TAG to exactly what this pushed.
+          tags: type=sha,prefix=sha-
+
+      - name: Push
+        uses: docker/build-push-action@v6
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
