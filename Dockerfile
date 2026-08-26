@@ -4,7 +4,11 @@
 # client bundle at build time. The published npm tarball ships dist/ with the
 # flag false, which renders a login form against a server that no longer
 # checks one.
-ARG NODE_IMAGE=node:22-bookworm-slim
+
+# Node 24 is the major the rest of the fleet runs. Upstream's .nvmrc says v22
+# and its README says v22 or higher, so 24 is inside what it supports; the
+# three native modules and a node-pty shell were exercised on it.
+ARG NODE_IMAGE=node:24-bookworm-slim
 
 FROM ${NODE_IMAGE} AS build
 
@@ -69,9 +73,16 @@ COPY --from=build /src/node_modules ./node_modules
 # Created owned by uid 1000 so the image also runs without the data mount.
 RUN install -d -o node -g node /data
 
+# VITE_IS_PLATFORM is compiled into dist/ by the build stage, and the server
+# reads it from the environment at start. The image declares it so the two
+# halves cannot disagree: supplied only by .env, an omission leaves the client
+# rendering an app whose every API call 401s, with no login form to fall back
+# to because the build removed it.
+#
 # CloudCLI resolves ~/.claude and ~/.cloudcli through os.homedir() and honours
 # no override, so HOME is what puts transcripts and assets on the data mount.
-ENV HOME=/data \
+ENV VITE_IS_PLATFORM=true \
+    HOME=/data \
     NODE_ENV=production \
     SERVER_PORT=3001 \
     HOST=0.0.0.0
