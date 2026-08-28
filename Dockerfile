@@ -76,6 +76,7 @@ WORKDIR /app
 # package.json there for the version in /health.
 COPY --from=build /src/package.json ./package.json
 COPY --from=build /src/dist ./dist
+COPY sw.js ./dist/sw.js
 COPY --from=build /src/dist-server ./dist-server
 COPY --from=build /src/node_modules ./node_modules
 
