@@ -42,6 +42,41 @@ services:
         read_only: true
         bind:
           create_host_path: false
+      # The rest of the behaviour profile. Absolute, because it is outside this
+      # clone — /srv/chat is a git checkout the deploy pulls in, and the profile
+      # is rsynced separately from the operator's own ~/.claude.
+      #
+      # Mounted piece by piece rather than as one bind over /data/.claude,
+      # because that directory is live: the CLI writes settings.json, projects/
+      # and sessions/ there, and a bind over it would hide all three.
+      #
+      # These are directory binds, so a skill added at a desk appears here on
+      # the next deploy without a restart. CLAUDE.md above is a single file, and
+      # replacing it swaps the inode, so that one needs the container recreated.
+      - type: bind
+        source: /srv/claude-profile/output-styles
+        target: /data/.claude/output-styles
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /srv/claude-profile/skills
+        target: /data/.claude/skills
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /srv/claude-profile/agents
+        target: /data/.claude/agents
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /srv/claude-profile/commands
+        target: /data/.claude/commands
+        read_only: true
+        bind:
+          create_host_path: false
       - type: bind
         source: ./claude/managed-settings.json
         target: /etc/claude-code/managed-settings.json
