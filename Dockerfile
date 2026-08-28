@@ -50,6 +50,7 @@ RUN apt-get update \
       tini \
       tokei \
       tree \
+      tzdata \
       unzip \
       vim-tiny \
       wget \
