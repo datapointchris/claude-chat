@@ -82,6 +82,24 @@ jobs:
       - name: pip can write to the interpreter
         run: docker exec verify sudo -n python3 -m pip install --quiet --no-input tomli-w
 
+      - name: Nothing a viewer reads names the product
+        # This front end is opened from a work machine. A tab reading
+        # "Claude UI" is the thing that gets noticed.
+        run: |
+          rc=0
+          page=$(curl -fsS http://localhost:3001/)
+          echo "$page" | grep -q '<title>Console</title>' || { echo "FAIL: title"; rc=1; }
+          for marker in CloudCLI Claude claude; do
+            if echo "$page" | grep -qF "$marker"; then
+              echo "FAIL: index.html carries $marker"
+              rc=1
+            fi
+          done
+          curl -fsS http://localhost:3001/manifest.json | tee /dev/stderr \
+            | jq -e '.name == "Console" and .short_name == "Console"' >/dev/null \
+            || { echo "FAIL: manifest"; rc=1; }
+          exit $rc
+
       - name: The image carries VITE_IS_PLATFORM
         # Both halves are compiled in, so the image has to declare the server's.
         run: |
