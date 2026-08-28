@@ -24,13 +24,10 @@ services:
         target: /data
         bind:
           create_host_path: false
-      - type: bind
-        source: ./claude/CLAUDE.md
-        target: /data/.claude/CLAUDE.md
-        read_only: true
-        bind:
-          create_host_path: false
-      # The rest of the behaviour profile, rsynced from the operator's ~/.claude.
+      # CLAUDE.md is deliberately not bound. It lives inside the data mount so
+      # the agent can edit its own instructions and the edit persists.
+      #
+      # The behaviour profile, rsynced from the operator's ~/.claude.
       # Mounted piece by piece because /data/.claude is live — the CLI writes
       # settings.json, projects/ and sessions/ there.
       - type: bind
