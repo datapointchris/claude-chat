@@ -1,8 +1,8 @@
 # claude-chat
 
 This repo builds one container image and stops. CloudCLI is third-party and none of its source is
-vendored here. The Dockerfile clones an upstream tag, compiles it, and installs a pinned `claude`
-beside it. Nothing here is patched, so this is packaging rather than a fork.
+vendored here. The Dockerfile clones upstream, compiles it, and installs `claude` and the agent's
+toolchain beside it. Nothing here is patched, so this is packaging rather than a fork.
 
 Anything that is not the image — the host, its corpus, the agent's guidance and permissions, the
 reverse-proxy route, the backups — is provisioned elsewhere and does not belong in this repo.
@@ -40,10 +40,10 @@ server's is read from the environment. The image sets the server's so they canno
 build sets the client's. A build that omits it ships a login form; an environment that omits it
 rejects every API call. Neither failure shows up on `/health`.
 
-**The clone directory doubles as the runtime directory on the host.** `claude/`, `.env` and
-`.env.image` live inside the working tree and are gitignored, as is `data/`, which nothing uses at
-runtime. An upstream file landing at any of those paths would make `git pull` fail on the host with
-nothing wrong in the repo.
+**The clone directory doubles as the runtime directory on the host.** `claude/` and `.env` live
+inside the working tree and are gitignored, as is `data/`, which nothing uses at runtime. An
+upstream file landing at any of those paths would make `git pull` fail on the host with nothing
+wrong in the repo.
 
 The database and transcripts stay out of it, at `/var/db/chat`. The deploy runs `git` in the clone
 directory, so anything ignored there is one `git clean -fdx` away from being deleted.

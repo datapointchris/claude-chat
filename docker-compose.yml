@@ -2,57 +2,37 @@ name: chat
 
 services:
   chat:
-    image: ghcr.io/datapointchris/claude-chat:${CHAT_IMAGE_TAG:?set CHAT_IMAGE_TAG to a sha-<short> tag}
+    image: ghcr.io/datapointchris/claude-chat:latest
     container_name: chat
     restart: unless-stopped
+    pull_policy: always
     ports:
       - '80:3001'
     env_file: .env
-    security_opt:
-      - no-new-privileges:true
+    # No `no-new-privileges`: it blocks the setuid bit the agent's sudo needs.
     volumes:
-      # WORKSPACES_ROOT. The agent writes here. Refuses to start when absent:
-      # an invented root-owned directory would pass the app's realpath check and
-      # present as an empty corpus rather than as an error.
+      # WORKSPACES_ROOT. The agent writes here.
       - type: bind
         source: /srv/corpus
         target: /srv/corpus
         bind:
           create_host_path: false
       # HOME. Holds auth.db, ~/.claude/projects transcripts and ~/.cloudcli
-      # assets. Outside the clone: /srv/chat is a git checkout the deploy pulls
-      # in, and git clean -fdx there is a thing someone does to unstick a pull.
-      # -x reaches it precisely because .gitignore covers data/.
+      # assets. Outside the clone, so `git clean -fdx` there cannot reach it.
       - type: bind
         source: /var/db/chat
         target: /data
         bind:
           create_host_path: false
-      # Read-only binds. A bind mounted read-only cannot be written whatever the
-      # file's ownership, which is what stops the agent's own Bash tool editing
-      # its guidance or its permissions.
-      #
-      # create_host_path is off on both. Compose otherwise invents a missing
-      # source as a directory, so a deploy that has not placed these yet would
-      # mount a directory where the deny list belongs and start with no deny
-      # list at all, reporting healthy throughout.
       - type: bind
         source: ./claude/CLAUDE.md
         target: /data/.claude/CLAUDE.md
         read_only: true
         bind:
           create_host_path: false
-      # The rest of the behaviour profile. Absolute, because it is outside this
-      # clone — /srv/chat is a git checkout the deploy pulls in, and the profile
-      # is rsynced separately from the operator's own ~/.claude.
-      #
-      # Mounted piece by piece rather than as one bind over /data/.claude,
-      # because that directory is live: the CLI writes settings.json, projects/
-      # and sessions/ there, and a bind over it would hide all three.
-      #
-      # These are directory binds, so a skill added at a desk appears here on
-      # the next deploy without a restart. CLAUDE.md above is a single file, and
-      # replacing it swaps the inode, so that one needs the container recreated.
+      # The rest of the behaviour profile, rsynced from the operator's ~/.claude.
+      # Mounted piece by piece because /data/.claude is live — the CLI writes
+      # settings.json, projects/ and sessions/ there.
       - type: bind
         source: /srv/claude-profile/output-styles
         target: /data/.claude/output-styles

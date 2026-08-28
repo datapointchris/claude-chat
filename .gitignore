@@ -8,5 +8,4 @@ node_modules/
 # checkout, where git clean cannot reach it.
 /data/
 /claude/
-/.env.image
 .planning

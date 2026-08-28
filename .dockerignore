@@ -6,5 +6,4 @@
 data/
 claude/
 .env
-.env.image
 .git/

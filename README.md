@@ -3,7 +3,7 @@
 The container image behind a private, authenticated web front end for Claude Code.
 
 It packages [CloudCLI](https://github.com/siteboon/claudecodeui), a web front end for Claude Code,
-and a pinned `claude` binary for it to drive. It holds no application source — CloudCLI is
+and the `claude` binary for it to drive. It holds no application source — CloudCLI is
 third-party and this repo only builds it.
 
 ## Why an image rather than an npm install
@@ -25,10 +25,11 @@ are all in the homelab repo under `containers/chat-lxc/`. This repo ends at the 
 
 ## What the image contains
 
-`node:24-bookworm-slim`, in two stages. The build stage clones the upstream tag, runs `npm ci` and
+`node:24-trixie-slim`, in two stages. The build stage clones upstream, runs `npm ci` and
 `npm run build`, then prunes to production dependencies. The runtime stage carries `dist/`,
-`dist-server/`, `node_modules/` and `package.json`, plus `git`, `ripgrep`, `curl`, `tini` and a
-pinned `claude`.
+`dist-server/`, `node_modules/` and `package.json`, plus `claude`, `python3`, `uv`, a C toolchain,
+passwordless `sudo`, and the CLI tools the agent's instructions name — `rg`, `fd`, `eza`, `jq`,
+`yq`, `tokei`, `sqlite3`, `tree`, `less`.
 
 Debian rather than Alpine, for one blocking reason: CloudCLI's built-in terminal spawns `bash`
 unconditionally on anything that is not Windows, and Alpine has no bash. Glibc also means the
@@ -50,8 +51,7 @@ with no login form to fall back to because the build removed it.
 docker build .
 ```
 
-`CLOUDCLI_VERSION` and `CLAUDE_CODE_VERSION` are build args. Their defaults are in the Dockerfile
-and a bump is one line there.
+Everything is built from its latest release. Nothing here is version-pinned.
 
 ## Running it
 
@@ -59,14 +59,11 @@ The container listens on 3001 and runs as uid 1000. Running as root breaks proje
 `WORKSPACES_ROOT` falls back to the home directory, and `/root` is in CloudCLI's
 `FORBIDDEN_WORKSPACE_PATHS`.
 
-`docker-compose.yml` will not start without `CHAT_IMAGE_TAG` naming a `sha-<short>` tag. That is
-deliberate — a floating tag makes a rollback ambiguous — so a bare `docker compose up` typed by
-hand is expected to fail on the guard rather than silently pull something.
+The image is `ghcr.io/datapointchris/claude-chat:latest` and compose sets `pull_policy: always`.
 
 The clone directory doubles as the runtime directory. The compose file is git-pulled to `/srv/chat`,
-and `claude/`, `.env` and `.env.image` all sit inside the working tree there — the tag is pinned in
-`.env.image` and read by a second `--env-file`. `.gitignore` covers those three and `data/`, so a
-future upstream file at a colliding path cannot make `git pull` refuse on the host.
+and `claude/` and `.env` sit inside the working tree there. `.gitignore` covers those and `data/`,
+so a future upstream file at a colliding path cannot make `git pull` refuse on the host.
 
 The database and transcripts deliberately do not live there. `/srv/chat` is a git checkout that the
 deploy pulls into, so `git clean -fdx` is something an operator reaches for to unstick a pull, and
