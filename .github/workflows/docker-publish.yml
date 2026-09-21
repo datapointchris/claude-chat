@@ -1,5 +1,9 @@
 name: Build, smoke-test and publish the Docker image
 
+# The deploy receiver fires when this workflow succeeds on main, and matches it
+# by this file's path. Renaming the file stops every deploy until the receiver
+# names the new one.
+
 on:
   push:
     branches: [main]
