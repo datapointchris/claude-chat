@@ -1,4 +1,4 @@
-name: Bespoke CI
+name: Build, smoke-test and publish the Docker image
 
 on:
   push:
