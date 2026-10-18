@@ -61,7 +61,7 @@ RUN apt-get update \
  && ln -s /usr/bin/fdfind /usr/local/bin/fd \
  && npm install -g --no-audit --no-fund @anthropic-ai/claude-code@latest
 
-# Debian's yq is a different program from the Go one the fleet uses.
+# The Go yq, downloaded, because Debian's yq is a different program.
 RUN curl -fsSL -o /usr/local/bin/yq \
       https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 \
  && chmod 0755 /usr/local/bin/yq \
@@ -98,8 +98,8 @@ ENV VITE_IS_PLATFORM=true \
     PIP_BREAK_SYSTEM_PACKAGES=1 \
     PATH=/data/.local/bin:${PATH}
 
-# WORKSPACES_ROOT falls back to the home directory, and /root is in
-# FORBIDDEN_WORKSPACE_PATHS, so running as root breaks project creation.
+# The node user, which owns /data here and the data mount on the host. The
+# agent reaches root through sudo when a task needs it.
 USER 1000:1000
 
 EXPOSE 3001

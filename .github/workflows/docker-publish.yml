@@ -37,7 +37,9 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Start it
-        # No -u and no -e: every assertion below reads what the image declares.
+        # No -u, so the uid check reads the user the image declares. The -e
+        # values stand in for .env, which the image does not carry.
+        # VITE_IS_PLATFORM is not passed, so its check reads the image's own.
         run: |
           mkdir -p /tmp/verify/data /tmp/verify/corpus
           chmod -R 777 /tmp/verify

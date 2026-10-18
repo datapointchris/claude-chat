@@ -25,9 +25,10 @@ corpus in full; the transcripts, which carry everything ever asked about it. The
 password hash for an account nobody logs into.
 
 **What is done about it.** The tool deny list is mounted read-only at the managed-settings path,
-which no lower-precedence file can override. The container runs as uid 1000 with
-`no-new-privileges`. The reverse proxy enforces authentication, and the application's own login is
-compiled out rather than bypassed. Outbound network is accepted rather than mitigated.
+which no lower-precedence file can override. The container runs as uid 1000. It runs without
+`no-new-privileges`, because that blocks the setuid bit the agent's `sudo` needs. The reverse proxy
+enforces authentication, and the application's own login is compiled out rather than bypassed.
+Outbound network is accepted rather than mitigated.
 
 ## Two things that will bite
 

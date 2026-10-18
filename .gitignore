@@ -1,9 +1,9 @@
 node_modules/
 .env
 
-# /srv/chat is this repo's clone on the LXC and also its runtime directory, so
-# the paths the deploy creates there sit inside the working tree. Ignored so a
-# future upstream file at the same path cannot make git pull refuse. data/ is
+# On the host, this repo's clone is also its runtime directory, so the paths
+# the deploy creates there sit inside the working tree. Ignored so a file
+# committed at the same path cannot make git pull refuse there. data/ is
 # kept for that reason alone — the database lives at /var/db/chat, off the
 # checkout, where git clean cannot reach it.
 /data/
