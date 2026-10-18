@@ -108,8 +108,8 @@ source, which keeps this packaging.
 
 `sw.js` replaces CloudCLI's service worker. Upstream's worker caches under one fixed name in every
 build, so a replacement image never invalidates the client a browser already holds. The app then
-runs a stale client against a current server until someone clears site data by hand. The replacement drops every cache,
-unregisters itself and reloads open tabs.
+runs a stale client against a current server until someone clears site data by hand. The
+replacement drops every cache, unregisters itself and reloads open tabs.
 
 ## `docker-compose.yml` — state on the data mount, the deny list where nothing outranks it
 
