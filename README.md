@@ -43,20 +43,20 @@ curl -fsS http://localhost/api/projects          # a JSON list: platform mode fo
 subscription. Every other key in `.env.example` carries a comment saying what it does, and works as
 written. A blank `JWT_SECRET` is generated once and kept in the database.
 
-Every bind in the compose file sets `create_host_path: false`. A missing source refuses to start
-rather than being invented. Without that guard, Compose creates a missing source as a root-owned
-directory. For `managed-settings.json` that would be a healthy-looking container running with no
-deny list at all. The deny list is Claude Code settings JSON, with its rules under
+Every bind in the compose file sets `create_host_path: false`, so Compose refuses to start on a
+missing source rather than creating it. Without that guard, Compose creates a missing source as a
+root-owned directory. For `managed-settings.json` that would be a healthy-looking container running
+with no deny list at all. The deny list is Claude Code settings JSON, with its rules under
 `permissions.deny`.
 
 `/var/db/chat/.claude` is created by hand because the profile binds nest inside the read-write data
 mount. Docker creates a missing parent of a mount point as root. The container then cannot write
 `projects/` beside it.
 
-Platform mode needs one user row even though nobody logs in. Every authenticated route reads the
-first user, and returns 500 while the table is empty. `register` succeeds only while the table is
-empty. It wants a username of at least three characters and a password of at least six. The password
-is never used again.
+Platform mode, CloudCLI's name for running with `VITE_IS_PLATFORM` true, needs one user row even
+though nobody logs in. Every authenticated route reads the first user, and returns 500 while the
+table is empty. `register` succeeds only while the table is empty. It wants a username of at least
+three characters and a password of at least six. The password is never used again.
 
 The app has no login of its own. Whatever reaches port 80 gets the agent and a shell. An
 authenticating reverse proxy goes in front before that port is reachable from anywhere but the host.
@@ -70,7 +70,7 @@ docker build --build-arg APP_NAME=Notebook -t claude-chat .   # what the browser
 
 CloudCLI's own published images are Docker Sandbox templates. They run in a microVM through the
 `sbx` CLI, not as a plain container under Compose. Its npm package cannot be installed instead,
-because of one flag.
+because its client was compiled with the login switched on.
 
 CloudCLI's login is switched off by `VITE_IS_PLATFORM`, and that flag exists twice. The server reads
 `process.env.VITE_IS_PLATFORM` at startup. The client reads `import.meta.env.VITE_IS_PLATFORM`, which
@@ -103,8 +103,7 @@ from a release. `claude`, `yq` and `uv` come from their latest releases.
 
 `rebrand.sh` runs over the built client. It sets the page title, the mobile app title and the
 manifest's names to `APP_NAME`, which defaults to `Console`. It swaps the tab icon for a neutral mark
-and drops the icons that carry upstream's artwork. It rewrites built output rather than upstream
-source, which keeps this packaging.
+and drops the icons that carry upstream's artwork.
 
 `sw.js` replaces CloudCLI's service worker. Upstream's worker caches under one fixed name in every
 build, so a replacement image never invalidates the client a browser already holds. The app then
@@ -153,9 +152,9 @@ through `node-pty`. `$HOME` holds the transcripts, the MCP configuration and the
 The environment holds `CLAUDE_CODE_OAUTH_TOKEN`, a bearer credential for a paid API, usable from
 anywhere. Outbound network is unrestricted.
 
-If it egresses once, the token goes first, and rotation is its only remedy. The corpus goes in full.
-The transcripts carry everything ever asked about it. The database holds one password hash, for an
-account nobody logs into.
+If it egresses once, the token is the worst loss, and rotation is its only remedy. The corpus goes
+in full, and the transcripts carry everything ever asked about it. The database holds one password
+hash, for an account nobody logs into.
 
 The defenses are the deny list at the managed-settings path, the authenticating proxy, and a login
 compiled out rather than bypassed. Outbound network is accepted rather than mitigated.

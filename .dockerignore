@@ -1,8 +1,8 @@
 # The build clones its source and copies only sw.js and rebrand.sh from this
-# context, so everything listed here is upload cost. Most of these are also the
-# runtime paths on the host, where the clone directory doubles as it, and .env
-# there holds CLAUDE_CODE_OAUTH_TOKEN. A build run from that directory would
-# otherwise send it to the daemon.
+# context, so everything listed here is upload cost. On the host the clone is
+# also the runtime directory, so most of these exist there, and .env holds
+# CLAUDE_CODE_OAUTH_TOKEN. A build run from the clone would otherwise send it
+# to the daemon.
 data/
 claude/
 .env
