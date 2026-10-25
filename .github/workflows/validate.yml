@@ -1,4 +1,4 @@
-# forge-toolchain: 52
+# forge-toolchain: 53
 name: CI
 
 on:
@@ -197,7 +197,7 @@ jobs:
             bats
             codespell
             refcheck
-            hadolint-docker
+            hadolint
             jactionlint
           )
           # Every hook runs whatever the one before it found, so one push
