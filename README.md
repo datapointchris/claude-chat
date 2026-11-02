@@ -50,8 +50,8 @@ with no deny list at all. The deny list is Claude Code settings JSON, with its r
 `permissions.deny`.
 
 `/var/db/chat/.claude` is created by hand because the profile binds nest inside the read-write data
-mount. Docker creates a missing parent of a mount point as root. The container then cannot write
-`projects/` beside it.
+mount. Docker creates a missing parent of a mount point as root, and the container then cannot
+write `projects/` into `/data/.claude`.
 
 Platform mode, CloudCLI's name for running with `VITE_IS_PLATFORM` true, needs one user row even
 though nobody logs in. Every authenticated route reads the first user, and returns 500 while the
@@ -83,8 +83,8 @@ rejects every API call. Neither failure shows up on `/health`.
 
 Both stages are Debian slim Node images. Debian rather than Alpine, for one blocking reason:
 CloudCLI's terminal spawns `bash` on anything that is not Windows, and Alpine has no bash. The Node
-major comes from the base image tag, not from upstream's `.nvmrc`. Upstream's README treats that
-version as a minimum.
+major comes from the base image tag, not from upstream's `.nvmrc`. Upstream's README treats the
+`.nvmrc` version as a minimum.
 
 The build stage clones upstream, runs `npm ci` and `npm run build`, then prunes to production
 dependencies. The runtime stage carries `dist/`, `dist-server/`, `node_modules/` and `package.json`.

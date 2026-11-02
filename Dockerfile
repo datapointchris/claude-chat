@@ -98,8 +98,8 @@ ENV VITE_IS_PLATFORM=true \
     PIP_BREAK_SYSTEM_PACKAGES=1 \
     PATH=/data/.local/bin:${PATH}
 
-# The node user, which owns /data here and the data mount on the host. The
-# agent reaches root through sudo when a task needs it.
+# uid 1000 is the node user, which owns /data here and the data mount on the
+# host.
 USER 1000:1000
 
 EXPOSE 3001
